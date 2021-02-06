@@ -1,0 +1,4 @@
+notebooks/*
+!notebooks/*.ipynb
+scrape/*
+!scrape/*.py
