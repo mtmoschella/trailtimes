@@ -286,6 +286,8 @@ if __name__=='__main__':
     #route_url = "https://www.alltrails.com/trail/us/colorado/green-mountain-west-trail"
     #route_url = "https://www.alltrails.com/trail/us/utah/angels-landing-trail"
     #route_url = "https://www.alltrails.com/trail/us/new-jersey/croft-farm-trail--6"
-    route_url = "https://www.alltrails.com/trail/us/california/half-dome-trail"
-    scrape(route_url, overwrite=True)
+    #route_url = "https://www.alltrails.com/trail/us/california/half-dome-trail"
+    #route_url = "https://www.alltrails.com/trail/us/virginia/old-rag-mountain-loop-trail"
+    route_url = "https://www.alltrails.com/trail/us/wyoming/cascade-canyon-trail"
+    scrape(route_url)
 
