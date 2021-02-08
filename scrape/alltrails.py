@@ -6,6 +6,7 @@ from selenium.webdriver.firefox.options import Options
 import re
 import pandas as pd
 import os
+import time
 
 metadata_columns = ['Title', 'Distance (mi)', 'Elevation Gain (ft)', 'Route Type', 'Number of Recordings']
 data_columns = ['Athlete ID', 'Start', 'Stop', 'Total Time (s)', 'Moving Time (s)', 'Distance (mi)', 'Elevation Gain (ft)', 'Elevation Loss (ft)']
@@ -52,7 +53,54 @@ def remove_commas(string):
         string = string[:i]+string[i+1:]
     return string
 
-def parse_recording(activity):
+def get_full_html(driver, max_clicks):
+    """
+    Given driver at an alltrails.com webpage, click "Recordings" and then click "Show more recordings" until the button disappears or until max_clicks is reached.
+
+    Returns the resulting rendered html as a string.
+    """
+    # click Recordings
+    button = driver.find_element_by_xpath('//button[contains(.,"Recordings")]')
+    text = button.text
+    button.click()
+    
+    # click Show more recordings until the button disappears
+    for i in tqdm(range(max_clicks), ascii=True, desc="Loading Recordings"):
+        try:
+            # click button if button exists
+            button = driver.find_element_by_xpath('//button[contains(@title,"Show more recordings")]')
+            button.click()
+            time.sleep(5) # wait before next click to ensure everything loads properly
+        except:
+            # if button doesn't exist, stop
+            break
+
+    html = driver.execute_script("return document.getElementsByTagName('html')[0].innerHTML")
+    return html
+
+def get_activities(html):
+    """
+    Given the full website html as a string, return the unique activity strings that are found.
+
+    Activity string is defined as href="/explore/recording/<activity>"
+
+    Returns a list of unique acitivity strings
+    """
+    # loop over available activity data
+    activities = []
+    pbar = tqdm(total=html.count(activity_start_flag), ascii=True, desc="Identifying Activities")
+    i=0
+    while activity_start_flag in html[i+1:]:
+        i = html.index(activity_start_flag, i+1)
+        j = i + len(activity_start_flag)-1
+        k = html.index('"', j)
+        activities.append(html[j+1:k])
+        pbar.update(1)
+    pbar.close()
+
+    return list(set(activities)) # return only unique activities
+
+def parse_activity(activity):
     """
     Given the alltrails.com/ url-name for the activity, get the url,
     and scrape the data specified in <parse_columns>
@@ -62,28 +110,37 @@ def parse_recording(activity):
 
     Returns a dict with the parsed data (columns given by data_columns)
     """
+
     # init
     parsed_data = dict()
 
-    # fetch html as a string
-    url = root_url + activity
-    parser = urllib.request.urlopen(url)
-    html = ''
-    for line_utf in parser.readlines():
-        html += line_utf.decode('utf8')
-    parser.close()
+    ntries = 0
+    maxtries = 10
+    while ntries<maxtries:
+        try:
+            ntries +=1
+            # fetch html as a string
+            url = root_url + activity
+            parser = urllib.request.urlopen(url)
+            html = ''
+            for line_utf in parser.readlines():
+                html += line_utf.decode('utf8')
+            parser.close()
+            break
+        except:
+            print("WARNING: Failed to load HTML.")
+            print("Trying to fetch HTML again ("+str(ntries)+" of "+str(maxtries)+")")
     
     # loop over columns to parse
     for col in parse_columns:
-        if col in html:
+        try:
             i = html.index(col) 
             j = html.index(':', i)
             k = html.index(',', j)
             parsed_data[col] = trim(html[j+1:k].strip('} '))
-        else:
+        except:
+            #print("WARNING: Found missing column "+col)
             parsed_data[col] = ''
-
-
 
     # convert from parsed data columns to regular data columns
     data = dict()
@@ -168,59 +225,44 @@ def parse_route(url):
     Returns a metadata dict (columns given by metadata_columns), 
     as well as a data dict (columns given by data_columns)
     """
-    driver = getwebdriver(url)
 
-    # get metadata
-    metadata = parse_metadata(driver)
-    nrec = metadata['Number of Recordings'][0]
-    
-    # click Recordings
-    button = driver.find_element_by_xpath('//button[contains(.,"Recordings")]')
-    text = button.text
-    button.click()
-    
-    
-    # click Show more recordings until the button disappears
-    max_clicks = 1 + int(nrec/30)
-    for i in tqdm(range(max_clicks), ascii=True, desc="Loading Recordings"):
-        try:
-            # click button if button exists
-            button = driver.find_element_by_xpath('//button[contains(@title,"Show more recordings")]')
-            button.click()
-        except:
-            # if button doesn't exist, stop
-            break
+    good = False
+    ntries = 0
+    maxtries = 10
+    while not good and ntries<maxtries:
+        ntries += 1
+        
+        driver = getwebdriver(url)
 
-    # get post-js html 
-    html = driver.execute_script("return document.getElementsByTagName('html')[0].innerHTML")
-    driver.close()
+        # get metadata
+        metadata = parse_metadata(driver)
+        nrec = metadata['Number of Recordings'][0]
 
-    assert html.count(activity_start_flag)>=nrec, "ERROR: did not find enough occurences of activity_start_flag"
-    
-    # loop over available activity data and parse
+        # get html
+        max_clicks = 1 + int(nrec/30)
+        html = get_full_html(driver, max_clicks)
+        driver.close()
+        
+        # get list of activities
+        activities = get_activities(html)
+
+        if len(activities)==nrec:
+            good = True # termination condition
+        else:
+            print("WARNING: Found "+str(len(activities))+" activities but expected "+str(nrec))
+            print("Trying to fetch HTML again ("+str(ntries)+" of "+str(maxtries)+")")
+
+    if not good:
+        raise Exception("ERROR: could not fetch HTML with correct number of activities")
+    else:
+        assert len(activities)==nrec, 'ERROR: in my logic somewhere'
+
     data = dict([ (col, []) for col in data_columns])
-    activities = []
-    pbar = tqdm(total=nrec, ascii=True, desc="Parsing Recordings")
-    i=0
-    while len(activities)<nrec:
-        try:
-            i = html.index(activity_start_flag, i+1)
-            j = i + len(activity_start_flag)-1
-            k = html.index('"', j)
-            activity = html[j+1:k]
-            if activity not in activities: # avoid double counting recordings
-                activities.append(activity)
-                activity_data = parse_recording(activity)
-                for col in data.keys():
-                    data[col].append(activity_data[col])
-                pbar.update(1)
-        except:
-            print("WARNING: while loop terminated early due to error")
-            break
-    pbar.close()
+    for activity in tqdm(activities, ascii=True, desc="Parsing Activities"):
+        activity_data = parse_activity(activity)
+        for col in data_columns:
+            data[col].append(activity_data[col])
 
-    if len(activities)!=nrec:
-        metadata['Number of Recordings'] = len(activities)
     return metadata, data
 
 def scrape(url, overwrite=False):
