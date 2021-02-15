@@ -44,13 +44,13 @@ def trim(string):
 
     return string
 
-def remove_commas(string):
+def remove_substring(string, substring, replace=''):
     """
     Removes commas from string
     """
-    while ',' in string:
-        i = string.index(',')
-        string = string[:i]+string[i+1:]
+    while substring in string:
+        i = string.index(substring)
+        string = string[:i]+replace+string[i+len(substring):]
     return string
 
 def get_full_html(driver, max_clicks):
@@ -183,7 +183,7 @@ def parse_metadata(driver):
     j = distance_string.index('>', i+7)
     k = distance_string.index('</span>',j)
     distance, distance_unit = distance_string[j+1:k].strip(' ').split(' ')
-    metadata['Distance (mi)'] = [float(remove_commas(distance))]
+    metadata['Distance (mi)'] = [float(remove_substring(distance, ','))]
     if distance_unit!='mi':
         print("WARNING: unexpected unit for distance ("+distance_unit+")")
 
@@ -193,7 +193,7 @@ def parse_metadata(driver):
     j = elevation_string.index('>', i+7)
     k = elevation_string.index('</span>',j)
     elevation, elevation_unit = elevation_string[j+1:k].strip(' ').split(' ')
-    metadata['Elevation Gain (ft)'] = [float(remove_commas(elevation))]
+    metadata['Elevation Gain (ft)'] = [float(remove_substring(elevation, ','))]
     if elevation_unit !='ft':
         print("WARNING: unexpeted unit for elevation ("+elevation_unit+")")
 
@@ -202,7 +202,7 @@ def parse_metadata(driver):
     i = route_string.index('</span>')
     j = route_string.index('>', i+7)
     k = route_string.index('</span>',j)
-    route = route_string[j+1:k].strip(' ')
+    route = remove_substring(route_string[j+1:k].strip(' '), 'amp;')
     metadata['Route Type'] = [route]
     
     # get the number of recordings
@@ -210,7 +210,7 @@ def parse_metadata(driver):
     j = html.index('(', i)
     k = html.index(')',j)
     nrecordings = html[j+1:k].strip(' ')
-    nrecordings = int(remove_commas(nrecordings))
+    nrecordings = int(remove_substring(nrecordings,','))
     metadata['Number of Recordings'] = [nrecordings]
 
     return metadata
@@ -275,8 +275,8 @@ def scrape(url, overwrite=False):
     if not os.path.exists(metafile) or not os.path.exists(datafile) or overwrite:
         print("Scraping AllTrails Route: "+shortname)
         metadata, data = parse_route(url)
-        pd.DataFrame(data).to_csv(datafile)
-        pd.DataFrame(metadata).to_csv(metafile) # index=[0] because metadata contains scalars (i.e. its entries are not arrays)
+        pd.DataFrame(data).to_csv(datafile, index=False)
+        pd.DataFrame(metadata).to_csv(metafile, index=False) # index=[0] because metadata contains scalars (i.e. its entries are not arrays)
         print("Done.")
     else:
         print("Specified data already exists. Do you want to set overwrite=True?")
@@ -288,6 +288,6 @@ if __name__=='__main__':
     #route_url = "https://www.alltrails.com/trail/us/new-jersey/croft-farm-trail--6"
     #route_url = "https://www.alltrails.com/trail/us/california/half-dome-trail"
     #route_url = "https://www.alltrails.com/trail/us/virginia/old-rag-mountain-loop-trail"
-    route_url = "https://www.alltrails.com/trail/us/wyoming/cascade-canyon-trail"
-    scrape(route_url)
+    #route_url = "https://www.alltrails.com/trail/us/wyoming/cascade-canyon-trail"
+    scrape(route_url, overwrite=False)
 
