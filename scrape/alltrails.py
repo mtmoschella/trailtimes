@@ -281,7 +281,14 @@ def scrape(url, overwrite=False):
     else:
         print("Specified data already exists. Do you want to set overwrite=True?")
     return
-    
+
+def crawl(url):
+    """
+    Crawls a page containing many routes, identifies routes, and then scrapes each route page
+    """
+    # implement me
+    pass
+
 if __name__=='__main__':
     #route_url = "https://www.alltrails.com/trail/us/colorado/green-mountain-west-trail"
     #route_url = "https://www.alltrails.com/trail/us/utah/angels-landing-trail"
@@ -292,6 +299,8 @@ if __name__=='__main__':
     #route_url = "https://www.alltrails.com/trail/us/colorado/emerald-lake-trail"
     #route_url = "https://www.alltrails.com/trail/us/arizona/devils-bridge-trail"
     #route_url = "https://www.alltrails.com/trail/us/tennessee/alum-cave-trail-to-mount-leconte"
-    route_url = "https://www.alltrails.com/trail/us/new-hampshire/mount-lafayette-and-franconia-ridge-trail-loop"
-    scrape(route_url)
+    #route_url = "https://www.alltrails.com/trail/us/new-hampshire/mount-lafayette-and-franconia-ridge-trail-loop"
+    #scrape(route_url)
+    url = "https://www.alltrails.com/us/"
+    crawl(url)
 
