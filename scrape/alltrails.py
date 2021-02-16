@@ -290,6 +290,8 @@ if __name__=='__main__':
     #route_url = "https://www.alltrails.com/trail/us/virginia/old-rag-mountain-loop-trail"
     #route_url = "https://www.alltrails.com/trail/us/wyoming/cascade-canyon-trail"
     #route_url = "https://www.alltrails.com/trail/us/colorado/emerald-lake-trail"
-    route_url = "https://www.alltrails.com/trail/us/arizona/devils-bridge-trail"
+    #route_url = "https://www.alltrails.com/trail/us/arizona/devils-bridge-trail"
+    #route_url = "https://www.alltrails.com/trail/us/tennessee/alum-cave-trail-to-mount-leconte"
+    route_url = "https://www.alltrails.com/trail/us/new-hampshire/mount-lafayette-and-franconia-ridge-trail-loop"
     scrape(route_url)
 
