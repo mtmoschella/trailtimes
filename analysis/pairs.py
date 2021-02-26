@@ -271,10 +271,13 @@ class LinearModel:
         """
         Returns the parameter double dict for the least square solution (without projection)
         """
-        params = 
+        params = dict()
         for routex in self.pairs.keys():
+            params[routex] = dict()
             for routey in self.pairs.keys():
                 x, y = self.getxy(routex, routey)
+                params[routex][routey], resid, rank, s = np.linalg.lstsq(lstsq_matrix(x), y, rcond=None)
+        return params
                 
 def get_routes():
     return os.listdir(datadir)
