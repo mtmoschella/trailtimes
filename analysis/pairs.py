@@ -220,7 +220,7 @@ class LinearModel:
             return finv(xorig, *params[route_dest][route_orig])
         else:
             raise Exception("ERROR: specified route combination doesn't exist")
-        
+
     def getxy(self, routex, routey, project=False, params=None):
         """
         params: double dict
@@ -274,7 +274,7 @@ class LinearModel:
         params = dict()
         for routex in self.pairs.keys():
             params[routex] = dict()
-            for routey in self.pairs.keys():
+            for routey in self.pairs[routex].keys():
                 x, y = self.getxy(routex, routey)
                 params[routex][routey], resid, rank, s = np.linalg.lstsq(lstsq_matrix(x), y, rcond=None)
         return params
@@ -349,9 +349,16 @@ def get_pairs():
 
 if __name__=='__main__':
     import matplotlib.pyplot as plt
+    print("Loading Pairs...")
     pairs = get_pairs()
+    print("Done.")
+    model = LinearModel(pairs)
+    params = model.lstsq_solution()
     for routex in pairs.keys():
         for routey in pairs[routex].keys():
+            print(routex, routey)
+            continue
+            p = params[routex][routey]
             n = len(pairs[routex][routey])
             if n<2:
                 continue
@@ -361,7 +368,7 @@ if __name__=='__main__':
                 xvals[i] = pair.getTime(routex)
                 yvals[i] = pair.getTime(routey)
             xgrid = np.linspace(np.amin(xvals), np.amax(xvals), 1000)
-            ygrid = xgrid
+            ygrid = model.f(xgrid, *p)
             plt.figure()
             plt.scatter(xvals, yvals, color='black', marker='o')
             plt.plot(xgrid, ygrid, color='blue')
