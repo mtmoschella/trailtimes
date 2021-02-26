@@ -123,7 +123,57 @@ class Pair:
         Returns the ID of the athlete that this pair belongs to
         """
         return self.athleteid
-    
+
+class Pairs:
+    """
+    Represents a collection of pairs.
+    """
+
+    def __init__(self, pairs=[]):
+        """
+        pairs: a list of pairs
+        """
+        self.pairs = set(pairs) # for now, just implement as a set of pairs
+        return
+
+    def add_pair(self, pair):
+        """
+        Adds the pair to the collection
+        """
+        self.pairs.add(pair)
+
+    def remove_pair(self, pair):
+        """
+        Removes the pair from the collection, raises error if pair is not in the collection.
+        """
+        self.pairs.remove(pair)
+
+    def get_pairs(self, routex=None, routey=None):
+        """
+        Returns a set of pairs with the specification provided.
+
+        If routex is specified, all returned pairs will have one route == routex.
+        If routey is specified, all returned pairs will have one route == routey.
+        Equivalently, if routex and routey are specified, all returned pairs will be of the type {outex, routey} (Pair objects are not ordered).
+        Equivalently, if routex and routey are not specified, returns a copy of the entire set of pairs
+        """
+        if routex is None and routey is None:
+            return self.pairs.copy()
+        else:
+            match_routes = set()
+            if routex is not None:
+                match_routes.add(routex)
+            if routey is not None:
+                match_routes.add(routey)
+
+            output = set()                
+            for pair in self.pairs:
+                routes = pair.getRoutes()
+                if match_routes <= routes:
+                    output.add(pair)
+
+            return output
+
 class Athlete:
     """
     Represents a paired athlete, with at least 2 activities on 2 different routes.
@@ -320,7 +370,7 @@ def get_athletes():
     print("Found "+str(len(athletes))+" out of "+str(len(activities))+" athletes with multiple routes.")
     return athletes
 
-def get_pairs():
+def get_all_pairs():
     # initialize empty double dict for pairs
     pairs = dict()
     routes = list(get_routes())
@@ -350,7 +400,7 @@ def get_pairs():
 if __name__=='__main__':
     import matplotlib.pyplot as plt
     print("Loading Pairs...")
-    pairs = get_pairs()
+    pairs = get_all_pairs()
     print("Done.")
     model = LinearModel(pairs)
     params = model.lstsq_solution()
