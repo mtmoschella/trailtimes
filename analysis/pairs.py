@@ -285,6 +285,11 @@ class LinearModel:
         return np.sum((y - f(x, *p))**2)
 
     def projection(route_orig, route_dest, params, xorig):
+        """
+        route_orig, route_dest: route strings
+        params: a dict indexed by frozenset([routex, routey])
+        xorig: a float
+        """
         if route_orig==route_dest:
             return xorig
         elif route_dest in params[route_orig].keys():
@@ -296,7 +301,9 @@ class LinearModel:
 
     def getxy(self, routex, routey, project=False, params=None):
         """
-        params: double dict
+        routex, route: route string
+        project: boolean
+        params: a dict, indexed by frozenset of the form {routex, routey}
         """
         # check valid args
         if routex==routey:
@@ -312,8 +319,10 @@ class LinearModel:
             vals = dict()
             matched_routes = set(routes & match_routes) 
             if len(matched_routes)==2 or (len(matched_routes)==1 and project):
+                # add the matches
                 for match in matched_routes:
                     vals[match] = pair.getTime(match)
+                # add the missed matches (need projection)
                 if len(matched_routes)==1:
                     route_orig = set(routes-match_routes).pop() # the unpaired route  
                     route_dest = set(match_routes-routes).pop() # the subset of {routex, routey} that is missing
