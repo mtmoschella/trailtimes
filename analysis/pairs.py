@@ -68,7 +68,7 @@ class Activity:
         meta = self.getMetadata()
         # currently, require distance to agree within 10% and totaltime>0
         return np.absolute((self.distance-meta.distance)/meta.distance)<0.1 and self.totaltime>0.
-    
+
 class Pair:
     """
     Represents a (non-ordered) pair of activities performed by the same athlete on different routes
@@ -76,7 +76,10 @@ class Pair:
 
     def __init__(self, ax, ay):
         """
-        ax, ay: instances of class Activity
+        ax, ay: instance of class Activity
+
+        ax and ay must have the same athleteid
+        ax and ay must not correspond to the same route
         """
         if ax.athleteid != ay.athleteid:
             raise Exception("ERROR: ax and ay must belong to the same athlete")
@@ -86,12 +89,12 @@ class Pair:
         self.athleteid = ax.athleteid
         self.ax = ax
         self.ay = ay
-        
+
     def getRoutes(self):
         """
         Returns the two uniue routes in this pair (ordered)
         """
-        return {self.ax.route, self.ay.route}
+        return frozenset([self.ax.route, self.ay.route]) # return hashable
 
     def getTimes(self):
         """
@@ -392,7 +395,7 @@ def get_all_pairs():
     for athleteid in athletes:
         athlete_pairs = athletes[athleteid].getPairs()
         for pair in athlete_pairs:
-            pairs.add(paid)
+            pairs.add(pair)
     return pairs
 
 if __name__=='__main__':
@@ -400,6 +403,8 @@ if __name__=='__main__':
     print("Loading Pairs...")
     pairs = get_all_pairs()
     print("Done.")
+    routes = pairs.getRoutes()
+    print(routes)
     exit()
     model = LinearModel(pairs)
     params = model.lstsq_solution()
