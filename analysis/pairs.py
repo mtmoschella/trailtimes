@@ -248,11 +248,38 @@ class Athlete:
                         pairs.add(Pair(ai,aj))
         return pairs
 
+class PairedData:
+    """
+    Represents a set of data points for a single paired of routes {routex, routey}
+    """
+    def __init__(self, routex, routey, xdata, ydata):
+        if routex==routey:
+            raise Exception("ERROR: routex and routey cannot be the same")
+        if len(xdata)!=len(ydata):
+            raise Exception("ERROR: xdata and ydata must be the same length")
+        
+        self.routex = routex
+        self.routey = routey
+        self.xdata = np.array(xdata)
+        self.ydata = np.array(ydata)
+
+    def getData(self, route):
+        if route==routex:
+            return self.xdata
+        elif route==routey:
+            return self.ydata
+        else:
+            raise Exception("ERROR: Invalid route "+str(route))
+    
 class LinearMap2D:
     """
     A functor class representing a mapping between two routes <routex> and <routey>
     """
     def __init__(self, routex, routey, params):
+        """
+        routex, routey : route strings
+        params: a tuple of floats (p0, p1)
+        """
         if routex==routey:
             raise Exception("ERROR: routex and routey cannot be the same")
         
@@ -265,6 +292,18 @@ class LinearMap2D:
 
     def finv(y, p0, p1):
         return (y-p0)/p1
+
+    def lstsq(data):
+        """
+        data: PairedData object
+
+        Returns the least squares parameter solution for the given data as a LinearMap2D object
+        """
+        x = data.xdata
+        y = data.ydata
+        matrix = np.transpose([x, np.ones(len(x))])
+        params, resid, rank, s = lstsq_matrix(matrix, y, rcond=None)
+        return LinearMap2D(data.routex, data.routey, params)
     
     def __eval__(route_orig, route_dest, x_orig):
         if route_orig==routex and route_dest==routey:
@@ -273,6 +312,16 @@ class LinearMap2D:
             return finv(x_orig, *self.params)
         else:
             raise Exception("ERROR: invalid routes specified")
+
+    def compute_residual(self, data):
+        """
+        data: a PairedData object
+
+        Returns the sum of the squares of the residuals y - f(x)
+        """
+        xdata = data.getData(routex)
+        ydata = data.getData(routey)
+        return np.sum((y - f(xdata, *self.params))**2)
     
 class LinearModel:
     """
@@ -287,23 +336,6 @@ class LinearModel:
         self.pairs = pairs
 
 
-    def lstsq_matrix(x):
-        """
-        Returns the nxm matrix A(x) need for linear least squares,
-        i.e. solves y = A(x)*p
-        
-        n is the number of data points, len(x)
-        m is the number of model parameters (2)
-        """
-        return np.transpose([x, np.ones(len(x))])
-    
-    def compute_residual(x, y, p):
-        """
-        p: parameters for the function f(x, *p)
-
-        Returns the sum of the squares of the residuals
-        """
-        return np.sum((y - f(x, *p))**2)
 
     def projection(route_orig, route_dest, maps, xorig):
         """
@@ -317,11 +349,13 @@ class LinearModel:
             key = frozenset([route_orig, route_dest])
             return maps[key](route_orig, route_dest, xorig)
 
-    def getxy(self, routex, routey, project=False, maps=None):
+    def getData(self, routex, routey, project=False, maps=None):
         """
         routex, route: route string
         project: boolean
         maps: a dict of LinearMap2D objects, indexed by frozenset([routex, routey])
+        
+        Returns a PairedData object
         """
         # check valid args
         if routex==routey:
@@ -339,7 +373,7 @@ class LinearModel:
             if len(matched_routes)==2 or (len(matched_routes)==1 and project):
                 # add the matches
                 for match in matched_routes:
-                    vals[match] = pair.getTime(match)
+n                    vals[match] = pair.getTime(match)
                 # add the missed matches (need projection)
                 if len(matched_routes)==1:
                     route_orig = set(routes-match_routes).pop() # the unpaired route  
@@ -352,32 +386,34 @@ class LinearModel:
             xvals.append(vals[routex])
             yvals.append(vals[routey])
             
-        return np.array(xvals), np.array(yvals)
+        return PairedData(routex, routey, xvals, yvals)
     
     def residuals(self, maps, project=False):
         """
         maps: a dict of LinearMap2D objects, indexed by frozenset([routex, routey])
+
         Compute the sum of the squares of all regression residuals
         """
         s = 0.
-        for routex in params.keys():
-            for routey in params[routex].keys():
-                x, y = self.getxy(routex, routey, project=project, params=params)
-                s += compute_residual(x, y, params[routex][routey])
+        for key in self.pairs.getRoutes():
+            routex, routey = key
+            data = self.getData(routex, routey, project=project, maps=maps)
+            s += maps[key].compute_residual(data)
         return s
     
     def lstsq_solution(self):
         """
-        Returns the parameter double dict for the least square solution (without projection)
+        Computes the least squares solution in each 2D plan without projection
+
+        Returns a dict of LinearMap2D objects, indexed by frozenset([routex, routey])
         """
-        params = dict()
-        for routex in self.pairs.keys():
-            params[routex] = dict()
-            for routey in self.pairs[routex].keys():
-                x, y = self.getxy(routex, routey)
-                params[routex][routey], resid, rank, s = np.linalg.lstsq(lstsq_matrix(x), y, rcond=None)
-        return params
-                
+        maps = dict()
+        for key in self.pairs.getRoutes():
+            routex, routey = key
+            data = self.getData(routex, routey)
+            maps[key] = LinearMap2D.lstsq(data)
+        return maps
+    
 def get_routes():
     return os.listdir(datadir)
 
