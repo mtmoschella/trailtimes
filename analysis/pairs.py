@@ -379,30 +379,20 @@ def get_athletes():
     return athletes
 
 def get_all_pairs():
-    # initialize empty double dict for pairs
-    pairs = dict()
-    routes = list(get_routes())
-    for i in range(len(routes)):
-        routei = routes[i]
-        if routei not in pairs.keys():
-            pairs[routei] = dict()
-        for j in range(i+1,len(routes)):
-            routej = routes[j]
-            if routej not in pairs[routei].keys():
-                pairs[routei][routej] = set()
+    """
+    Get all pairs in the dataset.
 
-    # fill dictionary
+    Returns a Pairs object
+    """
+    # initialize empty Pairs collection
+    pairs = Pairs()
+
+    # fill Pairs
     athletes = get_athletes()
     for athleteid in athletes:
         athlete_pairs = athletes[athleteid].getPairs()
         for pair in athlete_pairs:
-            routex, routey = pair.getRoutes()
-            if routey in pairs[routex].keys():
-                pairs[routex][routey].add(pair)
-            elif routex in pairs[routey].keys():
-                pairs[routey][routex].add(pair)
-            else:
-                raise Exception("Found an unexpected pair of routes")
+            pairs.add(paid)
     return pairs
 
 if __name__=='__main__':
