@@ -160,14 +160,18 @@ class Pairs:
             output.add(pair.getRoutes())
         return output
     
-    def getPairs(self, routex=None, routey=None):
+    def getPairs(self, routex=None, routey=None, either=False):
         """
         Returns a set of pairs with the specification provided.
 
-        If routex is specified, all returned pairs will have one route == routex.
-        If routey is specified, all returned pairs will have one route == routey.
-        Equivalently, if routex and routey are specified, all returned pairs will be of the type {outex, routey} (Pair objects are not ordered).
-        Equivalently, if routex and routey are not specified, returns a copy of the entire set of pairs
+        If neither routex nor routey are specified, returns a copy of the entire set of pairs
+        If only routex is specified, all returned pairs will have one route == routex.
+        If only routey is specified, all returned pairs will have one route == routey.
+        If routex and routey are specified, the behavior depends on the either flag.
+        If either is True:
+              Returns pairs with (routex or routey) in the set of routes
+        If either is False (default):
+              Returns only pairs with (routex and routey) in the set of routes.
         """
         if routex is None and routey is None:
             return self.pairs.copy()
@@ -181,8 +185,14 @@ class Pairs:
             output = set()                
             for pair in self.pairs:
                 routes = pair.getRoutes()
-                if match_routes <= routes:
-                    output.add(pair)
+                if not either:
+                    # entire subset must match
+                    if match_routes <= routes:
+                        output.add(pair)
+                else:
+                    # only require one element of subset to match
+                    if len(match_routes & routes)>0:
+                        output.add(pair)
             return output
 
 class Athlete:
@@ -246,7 +256,7 @@ class LinearModel:
     """
     def __init__(self, pairs):
         """
-        pairs is a double dict such that pairs[routex][routey] is set of Pair objects
+        pairs: a Pairs collection instance
         """
         self.pairs = pairs
 
@@ -275,7 +285,9 @@ class LinearModel:
         return np.sum((y - f(x, *p))**2)
 
     def projection(route_orig, route_dest, params, xorig):
-        if route_dest in params[route_orig].keys():
+        if route_orig==route_dest:
+            return xorig
+        elif route_dest in params[route_orig].keys():
             return f(xorig, *params[route_orig][route_dest])
         elif route_orig in params[route_dest].keys():
             return finv(xorig, *params[route_dest][route_orig])
@@ -292,28 +304,27 @@ class LinearModel:
         if project and params is None:
             raise Exception("ERROR: must specify params if you want to project")
             
+        match_routes = {routex, routey}
         xvals = []
         yvals = []
-        for pair in self.pairs:
+        for pair in self.pairs.getPairs(): # loop over all pairs
             routes = pair.getRoutes()
-            if routex in routes and routey in routes:
-                x, y = pair.getCoord(routex, routey)
-                xvals.append(x)
-                yvals.append(y)
-            elif routex in routes and project:
-                # routey not in routes
-                route_orig = (routes-routex).pop()
-                x = pair.getTime(routex)
-                y = projection(route_orig, routey, params, pair.getTime(route_orig)) # compute projection
-                xvals.append(x)
-                yvals.append(y)
-            elif routey in routes and project:
-                # routex not in routes
-                route_orig = (routes-routey).pop()
-                x = projection(route_orig, routex, params, pair.getTime(route_orig))
-                y = pair.getTime(routey)
-                xvals.append(x)
-                yvals.append(y)
+            vals = dict()
+            matched_routes = set(routes & match_routes) 
+            if len(matched_routes)==2 or (len(matched_routes)==1 and project):
+                for match in matched_routes:
+                    vals[match] = pair.getTime(match)
+                if len(matched_routes)==1:
+                    route_orig = set(routes-match_routes).pop() # the unpaired route  
+                    route_dest = set(match_routes-routes).pop() # the subset of {routex, routey} that is missing
+                    vals[route_dest] = projection(route_orig, route_dest, params, pair.getTime(route_orig))
+
+            ######## remove this assertion statement once I'm convinced the code is safe
+            assert set(vals.keys())==match_routes, "ERROR: There is a bug in the code"
+            
+            xvals.append(vals[routex])
+            yvals.append(vals[routey])
+            
         return np.array(xvals), np.array(yvals)
     
     def residuals(self, params, project=False):
