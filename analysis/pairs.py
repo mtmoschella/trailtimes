@@ -248,6 +248,32 @@ class Athlete:
                         pairs.add(Pair(ai,aj))
         return pairs
 
+class LinearMap2D:
+    """
+    A functor class representing a mapping between two routes <routex> and <routey>
+    """
+    def __init__(self, routex, routey, params):
+        if routex==routey:
+            raise Exception("ERROR: routex and routey cannot be the same")
+        
+        self.routex = routex
+        self.routey = routey
+        self.params = params
+
+    def f(x, p0, p1):
+        return p0 + p1*x
+
+    def finv(y, p0, p1):
+        return (y-p0)/p1
+    
+    def __eval__(route_orig, route_dest, x_orig):
+        if route_orig==routex and route_dest==routey:
+            return f(x_orig, *self.params)
+        elif route_orig==routey and route_dest==routex:
+            return finv(x_orig, *self.params)
+        else:
+            raise Exception("ERROR: invalid routes specified")
+    
 class LinearModel:
     """
     Represents a simultaneous regression of all possible route combinations.
@@ -260,11 +286,6 @@ class LinearModel:
         """
         self.pairs = pairs
 
-    def f(x, p0, p1):
-        return p0 + p1*x
-
-    def finv(y, p0, p1):
-        return (y-p0)/p1
 
     def lstsq_matrix(x):
         """
@@ -284,32 +305,29 @@ class LinearModel:
         """
         return np.sum((y - f(x, *p))**2)
 
-    def projection(route_orig, route_dest, params, xorig):
+    def projection(route_orig, route_dest, maps, xorig):
         """
         route_orig, route_dest: route strings
-        params: a dict indexed by frozenset([routex, routey])
+        maps: a dict of LinearMap2D objects indexed by frozenset([routex, routey])
         xorig: a float
         """
         if route_orig==route_dest:
             return xorig
-        elif route_dest in params[route_orig].keys():
-            return f(xorig, *params[route_orig][route_dest])
-        elif route_orig in params[route_dest].keys():
-            return finv(xorig, *params[route_dest][route_orig])
         else:
-            raise Exception("ERROR: specified route combination doesn't exist")
+            key = frozenset([route_orig, route_dest])
+            return maps[key](route_orig, route_dest, xorig)
 
-    def getxy(self, routex, routey, project=False, params=None):
+    def getxy(self, routex, routey, project=False, maps=None):
         """
         routex, route: route string
         project: boolean
-        params: a dict, indexed by frozenset of the form {routex, routey}
+        maps: a dict of LinearMap2D objects, indexed by frozenset([routex, routey])
         """
         # check valid args
         if routex==routey:
             raise Exception("ERROR: routex and routey must be different")
-        if project and params is None:
-            raise Exception("ERROR: must specify params if you want to project")
+        if project and maps is None:
+            raise Exception("ERROR: must specify maps if you want to project")
             
         match_routes = {routex, routey}
         xvals = []
@@ -326,7 +344,7 @@ class LinearModel:
                 if len(matched_routes)==1:
                     route_orig = set(routes-match_routes).pop() # the unpaired route  
                     route_dest = set(match_routes-routes).pop() # the subset of {routex, routey} that is missing
-                    vals[route_dest] = projection(route_orig, route_dest, params, pair.getTime(route_orig))
+                    vals[route_dest] = projection(route_orig, route_dest, maps, pair.getTime(route_orig))
 
             ######## remove this assertion statement once I'm convinced the code is safe
             assert set(vals.keys())==match_routes, "ERROR: There is a bug in the code"
@@ -336,9 +354,9 @@ class LinearModel:
             
         return np.array(xvals), np.array(yvals)
     
-    def residuals(self, params, project=False):
+    def residuals(self, maps, project=False):
         """
-        params: double dict
+        maps: a dict of LinearMap2D objects, indexed by frozenset([routex, routey])
         Compute the sum of the squares of all regression residuals
         """
         s = 0.
