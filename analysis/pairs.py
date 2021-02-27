@@ -136,19 +136,28 @@ class Pairs:
         self.pairs = set(pairs) # for now, just implement as a set of pairs
         return
 
-    def add_pair(self, pair):
+    def add(self, pair):
         """
         Adds the pair to the collection
         """
         self.pairs.add(pair)
 
-    def remove_pair(self, pair):
+    def remove(self, pair):
         """
         Removes the pair from the collection, raises error if pair is not in the collection.
         """
         self.pairs.remove(pair)
 
-    def get_pairs(self, routex=None, routey=None):
+    def getRoutes(self):
+        """
+        Returns a set of sets of pair routes, i.e. {{routex, routey}, ... }
+        """
+        output = set()
+        for pair in self.pairs:
+            output.add(pair.getRoutes())
+        return output
+    
+    def getPairs(self, routex=None, routey=None):
         """
         Returns a set of pairs with the specification provided.
 
@@ -171,7 +180,6 @@ class Pairs:
                 routes = pair.getRoutes()
                 if match_routes <= routes:
                     output.add(pair)
-
             return output
 
 class Athlete:
@@ -402,6 +410,7 @@ if __name__=='__main__':
     print("Loading Pairs...")
     pairs = get_all_pairs()
     print("Done.")
+    exit()
     model = LinearModel(pairs)
     params = model.lstsq_solution()
     for routex in pairs.keys():
