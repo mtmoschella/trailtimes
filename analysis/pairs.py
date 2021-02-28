@@ -304,7 +304,7 @@ class LinearMap2D:
         """
         x = data.xdata
         y = data.ydata
-        matrix = np.transpose([x, np.ones(len(x))])
+        matrix = np.transpose([np.ones(len(x)), x])
         params, resid, rank, s = np.linalg.lstsq(matrix, y, rcond=None)
         return LinearMap2D(data.routex, data.routey, params)
     
