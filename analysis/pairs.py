@@ -287,12 +287,15 @@ class LinearMap2D:
         self.routey = routey
         self.params = params
 
+    @staticmethod
     def f(x, p0, p1):
         return p0 + p1*x
 
+    @staticmethod
     def finv(y, p0, p1):
         return (y-p0)/p1
 
+    @staticmethod
     def lstsq(data):
         """
         data: PairedData object
@@ -302,14 +305,14 @@ class LinearMap2D:
         x = data.xdata
         y = data.ydata
         matrix = np.transpose([x, np.ones(len(x))])
-        params, resid, rank, s = lstsq_matrix(matrix, y, rcond=None)
+        params, resid, rank, s = np.linalg.lstsq(matrix, y, rcond=None)
         return LinearMap2D(data.routex, data.routey, params)
     
-    def __eval__(route_orig, route_dest, x_orig):
+    def __call__(self, route_orig, route_dest, x_orig):
         if route_orig==routex and route_dest==routey:
-            return f(x_orig, *self.params)
+            return self.f(x_orig, *self.params)
         elif route_orig==routey and route_dest==routex:
-            return finv(x_orig, *self.params)
+            return self.finv(x_orig, *self.params)
         else:
             raise Exception("ERROR: invalid routes specified")
 
@@ -373,18 +376,20 @@ class LinearModel:
             if len(matched_routes)==2 or (len(matched_routes)==1 and project):
                 # add the matches
                 for match in matched_routes:
-n                    vals[match] = pair.getTime(match)
+                    vals[match] = pair.getTime(match)
                 # add the missed matches (need projection)
                 if len(matched_routes)==1:
                     route_orig = set(routes-match_routes).pop() # the unpaired route  
                     route_dest = set(match_routes-routes).pop() # the subset of {routex, routey} that is missing
                     vals[route_dest] = projection(route_orig, route_dest, maps, pair.getTime(route_orig))
-
-            ######## remove this assertion statement once I'm convinced the code is safe
-            assert set(vals.keys())==match_routes, "ERROR: There is a bug in the code"
-            
-            xvals.append(vals[routex])
-            yvals.append(vals[routey])
+                ######## remove this assertion statement once I'm convinced the code is safe
+                assert set(vals.keys())==match_routes, "ERROR: There is a bug in the code"
+                #if set(vals.keys())!=match_routes:
+                #    print("ERROR:")
+                #    print("vals: "+str(vals.keys()))
+                #    print("match_routes: "+str(match_routes))
+                xvals.append(vals[routex])
+                yvals.append(vals[routey])
             
         return PairedData(routex, routey, xvals, yvals)
     
@@ -478,26 +483,16 @@ if __name__=='__main__':
     pairs = get_all_pairs()
     print("Done.")
     routes = pairs.getRoutes()
-    print(routes)
-    exit()
     model = LinearModel(pairs)
-    params = model.lstsq_solution()
-    for routex in pairs.keys():
-        for routey in pairs[routex].keys():
-            print(routex, routey)
-            continue
-            p = params[routex][routey]
-            n = len(pairs[routex][routey])
-            if n<2:
-                continue
-            xvals = np.zeros(n)
-            yvals = np.zeros(n)
-            for i, pair in enumerate(pairs[routex][routey]):
-                xvals[i] = pair.getTime(routex)
-                yvals[i] = pair.getTime(routey)
-            xgrid = np.linspace(np.amin(xvals), np.amax(xvals), 1000)
-            ygrid = model.f(xgrid, *p)
-            plt.figure()
-            plt.scatter(xvals, yvals, color='black', marker='o')
-            plt.plot(xgrid, ygrid, color='blue')
-            plt.show()
+    maps = model.lstsq_solution()
+    for key in pairs.getRoutes():
+        routex, routey = key
+        data = model.getData(routex, routey)
+        xvals = data.getData(routex)
+        yvals = data.getData(routey)
+        xgrid = np.linspace(np.amin(xvals), np.amax(xvals), 1000)
+        ygrid = maps[key](routex, routey, xgrid)
+        plt.figure()
+        plt.scatter(xvals, yvals, color='black', marker='o')
+        plt.plot(xgrid, ygrid, color='blue')
+        plt.show()
