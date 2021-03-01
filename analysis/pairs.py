@@ -3,6 +3,7 @@ import os
 from tqdm import tqdm
 from dataclasses import dataclass
 import numpy as np
+from scipy import odr
 
 datadir = '../data/'
 
@@ -372,32 +373,43 @@ class LinearMap2D:
         self.routey = routey
         self.params = params
 
-    @staticmethod
-    def f(x, p0, p1):
-        return p0 + p1*x
+        if {self.routex,self.routey} == {'old-rag-mountain-loop-trail', 'mount-lafayette-and-franconia-ridge-trail-loop'}:
+            print('(x,y): ', self.routex, self.routey)
+            self.special = True
+            print(params)
+        else:
+            self.special= False
 
     @staticmethod
-    def finv(y, p0, p1):
-        return (y-p0)/p1
+    def f(p, x):
+        return p[0] + p[1]*x
+
+    @staticmethod
+    def finv(p, y):
+        return (y-p[0])/p[1]
 
     @staticmethod
     def lstsq(data):
         """
         data: PairedData object
 
-        Returns the least squares parameter solution for the given data as a LinearMap2D object
+        Returns the (orthogonal) least squares parameter solution for the given data as a LinearMap2D object
         """
         x = data.xdata
         y = data.ydata
-        matrix = np.transpose([np.ones(len(x)), x])
-        params, resid, rank, s = np.linalg.lstsq(matrix, y, rcond=None)
-        return LinearMap2D(data.routex, data.routey, params)
+        mat = np.transpose([np.ones(len(x)), x])
+        p0, resid, rank, s = np.linalg.lstsq(mat, y, rcond=None) # use OLS for initial guess
+        odr_model = odr.Model(self.f)
+        odr_data = odr.Data(x, y)
+        odr_solver = odr.ODR(odr_data, odr_model, beta0=p0)
+        odr_output = odr_solver.run()
+        return odr_output.beta
     
     def __call__(self, route_orig, route_dest, x_orig):
         if route_orig==self.routex and route_dest==self.routey:
-            return self.f(x_orig, *self.params)
+            return self.f(self.params, x_orig)
         elif route_orig==self.routey and route_dest==self.routex:
-            return self.finv(x_orig, *self.params)
+            return self.finv(self.params, x_orig)
         else:
             raise Exception("ERROR: invalid routes specified")
 
@@ -405,23 +417,27 @@ class LinearMap2D:
         """
         data: a PairedData object
 
-        Returns the sum of the squares of the residuals y - f(x)
+        Returns the sum of the squares of the orthogonal residuals.
+        
+        Note, this is not the ordinary residuals y - (mx + b)
+        this is the orthogona residuals |mx+b-y|/sqrt(1+m^2)
         """
         xdata = data.getData(self.routex)
         ydata = data.getData(self.routey)
-        return np.sum((ydata - self.f(xdata, *self.params))**2)
+        m = self.params[1]
+        resid2 = (self.f(self.params, xdata) - ydata)**2/(1+m**2)
+        return np.sum(resid2)
 
-    def computeR2(self, data):
+
+    def computeRho(self, data):
         """
         data: a PairedData object
 
-        Returns the R^2 coefficient
+        Returns the (off-diagonal) Pearson correlation coefficient
         """
-
+        xdata = data.getData(self.routey)
         ydata = data.getData(self.routey)
-        ssres = self.compute_residual(data)
-        sstot = np.sum((ydata-np.mean(ydata))**2)
-        return 1. - ssres/sstot
+        return np.corrcoef(xdata, ydata)[0,1] 
     
 class LinearModel:
     """
@@ -507,7 +523,7 @@ class LinearModel:
             s += maps[key].compute_residual(data)
         return s
 
-    def computeR2(self, maps, project=False):
+    def computeRho(self, maps, project=False):
         """
         maps: a dict of LinearMap2D objects, indexed by frozenset([routex, routey])
 
@@ -515,16 +531,16 @@ class LinearModel:
 
         Returns a dict of floats, indexed by frozenset([routex, routey])
         """
-        R2 = dict()
+        rho = dict()
         for key in self.pairs.getRoutes():
             routex, routey = key
             data = self.getData(routex, routey, project=project, maps=maps)
-            R2[key] = maps[key].computeR2(data)
-        return R2
+            rho[key] = maps[key].computeRho(data)
+        return rho
     
     def lstsq_solution(self):
         """
-        Computes the least squares solution in each 2D plan without projection
+        Computes the (orthogonal) least squares solution in each 2D plan without projection
 
         Returns a dict of LinearMap2D objects, indexed by frozenset([routex, routey])
         """
@@ -542,7 +558,7 @@ def get_routes():
 def get_fname(route):
     return datadir+route+'/'+route+'.csv'
 
-def get_activities_by_athlete(clean=True):
+def get_activities_by_athlete(clean=False):
     # build dict of athletes with a set of routes by each athlete
     activities = dict()
     routes = get_routes()
@@ -612,7 +628,7 @@ if __name__=='__main__':
     routes = pairs.getRoutes()
     model = LinearModel(pairs)
     maps = model.lstsq_solution()
-    R2 = model.computeR2(maps)
+    rho = model.computeRho(maps)
     #for key in pairs.getRoutes():
     routex = 'old-rag-mountain-loop-trail'
     routey = 'mount-lafayette-and-franconia-ridge-trail-loop'
@@ -624,16 +640,11 @@ if __name__=='__main__':
         n = len(xvals)
         if n<10:
             continue
-        print(routex, routey, R2[key], n)
+        print(routex, routey, rho[key], n)
 
         xgrid = np.linspace(np.amin(xvals), np.amax(xvals), 1000)
         ygrid = maps[key](routex, routey, xgrid)
 
-        ypred = maps[key](routex, routey, xvals)
-
-        ss1 = np.sum((yvals-np.mean(yvals))**2)
-        ss2 = np.sum((yvals-ypred)**2)
-        print("Calculated R^2 = "+str(1.-ss2/ss1))
         if not percentile:
             renorm = 1./3600.
         else:
@@ -647,7 +658,7 @@ if __name__=='__main__':
         plt.plot(xgrid*renorm, ygrid*renorm, color='blue')
         plt.xlabel(r'Time on Old Rag [hrs]', fontsize=18)
         plt.ylabel(r'Time on Franconia Ridge [hrs]', fontsize=18)
-        msg = r'$R^2 = $' + str(round(R2[key], 3))
+        msg = r'$\rho = $' + str(round(rho[key], 3))
         plt.title(msg, fontsize=18)
         plt.tight_layout()
         plt.show()
