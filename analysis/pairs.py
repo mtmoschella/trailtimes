@@ -47,6 +47,7 @@ class Activity:
     gain : float # feet
     loss : float # feet
 
+    @staticmethod
     def from_row(route, row):
         """
         Given a pandas dataframe row (and the route), return the activity it corresponds to
@@ -69,6 +70,18 @@ class Activity:
         # currently, require distance and elevation gain to agree within 10% and totaltime>0
         return np.absolute((self.distance-meta.distance)/meta.distance)<0.1 and np.absolute((self.gain-meta.gain)/meta.gain)<0.1 and self.totaltime>0.
 
+    def percentile(self):
+        """
+        Returns the percentile for the Total Time (100% = shortest time)
+
+        In future, implement percentile for moving time as well.
+        """
+        fname = get_fname(self.route)
+        table = pd.read_csv(fname)
+        vals = np.array(table['Total Time (s)'])
+        n = np.count_nonzero(vals>self.totaltime)
+        return float(n)/len(vals)
+    
 class Pair:
     """
     Represents a (non-ordered) pair of activities performed by the same athlete on different routes
@@ -253,8 +266,20 @@ class Athlete:
         for i, activity in enumerate(activities):
             times[i] = activity.totaltime
         return np.mean(times)
-        
 
+    def getPercentile(self, route):
+        """
+        Returns the athlete's peak percentile
+        """
+        activities = self.getActivities(route)
+        if len(activities)==0:
+            raise Exception("ERROR: percentile is undefined")
+        percentiles = np.zeros(len(activities))
+        for i, activity in enumerate(activities):
+            percentiles[i] = activity.percentile()
+        return np.amax(percentiles)
+        
+        
     def getActivityPairs(self, routex=None, routey=None):
         """
         routex, routey: route strings
@@ -287,6 +312,24 @@ class Athlete:
             for ry in self.getRoutes(routey):
                 if ry!=rx:
                     y = self.getAverageTime(ry)
+                    output[frozenset([rx, ry])] = Pair(self.athleteid, rx, ry, x, y)
+        return set(output.values())
+
+    def getPercentilePairs(self, routex=None, routey=None):
+        """
+        routex, routey: route strings
+
+        Returns a set of Pair objects, a single Pair object for each specified combination {routex, routey}
+        """
+        if routex is not None and routex==routey:
+            raise Exception("ERROR: routex and routey cannot be the same")
+
+        output = dict()
+        for rx in self.getRoutes(routex):
+            x = self.getPercentile(rx)
+            for ry in self.getRoutes(routey):
+                if ry!=rx:
+                    y = self.getPercentile(ry)
                     output[frozenset([rx, ry])] = Pair(self.athleteid, rx, ry, x, y)
         return set(output.values())
     
@@ -534,12 +577,16 @@ def get_athletes():
     print("Found "+str(len(athletes))+" out of "+str(len(activities))+" athletes with multiple routes.")
     return athletes
 
-def get_all_pairs(avg=False):
+def get_all_pairs(avg=False, percentile=False):
     """
     Get all pairs in the dataset.
 
+    avg, percentile: booleans
+
     Returns a Pairs object
     """
+    if avg and percentile:
+        raise Exception("ERROR: only one of avg and percentile can be specified")
     # initialize empty Pairs collection
     pairs = Pairs()
 
@@ -548,6 +595,8 @@ def get_all_pairs(avg=False):
     for athleteid in athletes:
         if avg:
             athlete_pairs = athletes[athleteid].getAveragePairs()
+        elif percentile:
+            athlete_pairs = athletes[athleteid].getPercentilePairs()
         else:
             athlete_pairs = athletes[athleteid].getActivityPairs()
         for pair in athlete_pairs:
@@ -557,8 +606,9 @@ def get_all_pairs(avg=False):
 if __name__=='__main__':
     import matplotlib.pyplot as plt
     print("Loading Pairs...")
-    pairs = get_all_pairs(avg=True)
-    print("Done.")
+    avg = True
+    percentile = False
+    pairs = get_all_pairs(avg=avg, percentile=percentile)
     routes = pairs.getRoutes()
     model = LinearModel(pairs)
     maps = model.lstsq_solution()
@@ -572,11 +622,16 @@ if __name__=='__main__':
         if n<10:
             continue
         print(routex, routey, R2[key])
-        continue
 
         xgrid = np.linspace(np.amin(xvals), np.amax(xvals), 1000)
         ygrid = maps[key](routex, routey, xgrid)
+
+        if not percentile:
+            renorm = 1./3600.
+        else:
+            renorm = 1.
+    
         plt.figure()
-        plt.scatter(xvals/3600., yvals/3600., color='black', marker='o')
-        plt.plot(xgrid/3600., ygrid/3600., color='blue')
+        plt.scatter(xvals*renorm, yvals*renorm, color='black', marker='o')
+        plt.plot(xgrid*renorm, ygrid*renorm, color='blue')
         plt.show()
