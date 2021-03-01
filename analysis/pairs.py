@@ -351,9 +351,9 @@ class LinearMap2D:
         return LinearMap2D(data.routex, data.routey, params)
     
     def __call__(self, route_orig, route_dest, x_orig):
-        if route_orig==routex and route_dest==routey:
+        if route_orig==self.routex and route_dest==self.routey:
             return self.f(x_orig, *self.params)
-        elif route_orig==routey and route_dest==routex:
+        elif route_orig==self.routey and route_dest==self.routex:
             return self.finv(x_orig, *self.params)
         else:
             raise Exception("ERROR: invalid routes specified")
@@ -380,8 +380,7 @@ class LinearModel:
         """
         self.pairs = pairs
 
-
-
+    @staticmethod
     def projection(route_orig, route_dest, maps, xorig):
         """
         route_orig, route_dest: route strings
@@ -392,6 +391,8 @@ class LinearModel:
             return xorig
         else:
             key = frozenset([route_orig, route_dest])
+            if key not in maps.keys():
+                raise Exception("ERROR: invalid route specification. Perhaps the pathway doesn't exist?")
             return maps[key](route_orig, route_dest, xorig)
 
     def getData(self, routex, routey, project=False, maps=None):
@@ -416,14 +417,20 @@ class LinearModel:
             vals = dict()
             matched_routes = set(routes & match_routes) 
             if len(matched_routes)==2 or (len(matched_routes)==1 and project):
-                # add the matches
-                for match in matched_routes:
-                    vals[match] = pair.getTime(match)
                 # add the missed matches (need projection)
                 if len(matched_routes)==1:
                     route_orig = set(routes-match_routes).pop() # the unpaired route  
                     route_dest = set(match_routes-routes).pop() # the subset of {routex, routey} that is missing
-                    vals[route_dest] = projection(route_orig, route_dest, maps, pair.getTime(route_orig))
+                    if frozenset([route_orig, route_dest]) not in self.pairs.getRoutes():
+                        # a direct path from route_orig to route_dest does not exist
+                        # in future, can check for indirect paths, but for now, give up
+                        continue
+                    vals[route_dest] = self.projection(route_orig, route_dest, maps, pair.getTime(route_orig))
+                # add the matches
+                for match in matched_routes:
+                    vals[match] = pair.getTime(match)
+
+
                 ######## remove this assertion statement once I'm convinced the code is safe
                 assert set(vals.keys())==match_routes, "ERROR: There is a bug in the code"
                 #if set(vals.keys())!=match_routes:
@@ -460,7 +467,7 @@ class LinearModel:
             data = self.getData(routex, routey)
             maps[key] = LinearMap2D.lstsq(data)
         return maps
-    
+
 def get_routes():
     return os.listdir(datadir)
 
@@ -532,7 +539,7 @@ if __name__=='__main__':
     maps = model.lstsq_solution()
     for key in pairs.getRoutes():
         routex, routey = key
-        data = model.getData(routex, routey)
+        data = model.getData(routex, routey, project=True, maps=maps)
         xvals = data.getData(routex)
         yvals = data.getData(routey)
         n = len(xvals)
