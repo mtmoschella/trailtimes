@@ -73,7 +73,47 @@ class Pair:
     """
     Represents a (non-ordered) pair of activities performed by the same athlete on different routes
     """
+    def __init__(self, athleteid, routex, routey, x, y):
+        """
+        routex, routey: route strings
+        x, y: floats (representing activity times)
+        """
+        self.athleteid = athleteid
+        self.routex = routex
+        self.routey = routey
+        self.x = x
+        self.y = y
 
+    def getRoutes(self):
+        """
+        Returns the two uniue routes in this pair (ordered)
+        """
+        return frozenset([self.routex, self.routey]) # return hashable
+
+    def getTimes(self):
+        """
+        Returns a dict of pair of times indexed by routes for the activities in the pair
+        """
+        return {self.routex : self.x, self.routey : self.y}
+
+    def getTime(self, route):
+        if route==self.routex:
+            return self.x
+        elif route==self.routey:
+            return self.y
+        else:
+            raise Exception("ERROR: pair does not contain the route "+str(route))
+
+    def getAthleteID(self):
+        """
+        Returns the ID of the athlete that this pair belongs to
+        """
+        return self.athleteid
+
+class ActivityPair(Pair):
+    """
+    A subclass of Pair that represents two real activities
+    """
     def __init__(self, ax, ay):
         """
         ax, ay: instance of class Activity
@@ -85,48 +125,9 @@ class Pair:
             raise Exception("ERROR: ax and ay must belong to the same athlete")
         if ax.route == ay.route:
             raise Exception("ERROR: ax and ay must represent different routes")
+
+        super().__init__(ax.athleteid, ax.route, ay.route, ax.totaltime, ay.totaltime)
         
-        self.athleteid = ax.athleteid
-        self.ax = ax
-        self.ay = ay
-
-    def getRoutes(self):
-        """
-        Returns the two uniue routes in this pair (ordered)
-        """
-        return frozenset([self.ax.route, self.ay.route]) # return hashable
-
-    def getTimes(self):
-        """
-        Returns a dict of pair of times indexed by routes for the activities in the pair
-        """
-        return {self.ax.route : self.ax.totaltime, self.ay.route : self.ay.totaltime}
-
-    def getTime(self, route):
-        if route==self.ax.route:
-            return self.ax.totaltime
-        elif route==self.ay.route:
-            return self.ay.totaltime
-        else:
-            raise Exception("ERROR: pair does not contain the route "+str(route))
-
-    def getCoord(self, routex, routey):
-        """
-        Returns the times as an (x,y) ordered pair (tuple)
-        """
-        if routex==self.ax.route and routey==self.ay.route:
-            return self.ax.totaltime, self.ay.totaltime
-        elif routex==self.ay.route and routey==self.ax.route:
-            return self.ay.totaltime, self.ax.totaltime
-        else:
-            raise Exception("ERROR: invalid route specification")
-        
-    def getAthleteID(self):
-        """
-        Returns the ID of the athlete that this pair belongs to
-        """
-        return self.athleteid
-
 class Pairs:
     """
     Represents a collection of pairs.
@@ -235,7 +236,6 @@ class Athlete:
 
         if routex is not None and routex==routey:
             raise Exception("ERROR: routex and routey cannot be the same")
-            
         pairs = set()
         # this double for loop could be more efficient
         # currently, it double counts all pairs
@@ -245,7 +245,7 @@ class Athlete:
                     matches_routex = True if routex is None else ai.route==routex or aj.route==routex
                     matches_routey = True if routey is None else ai.route==routey or aj.route==routey
                     if matches_routey and matches_routex:
-                        pairs.add(Pair(ai,aj))
+                        pairs.add(ActivityPair(ai,aj))
         return pairs
 
 class PairedData:
