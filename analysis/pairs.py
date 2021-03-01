@@ -614,25 +614,40 @@ if __name__=='__main__':
     maps = model.lstsq_solution()
     R2 = model.computeR2(maps)
     #for key in pairs.getRoutes():
-    for key in [frozenset(['mount-lafayette-and-franconia-ridge-trail-loop', 'old-rag-mountain-loop-trail'])]:
-        routex, routey = key
-        data = model.getData(routex, routey, project=True, maps=maps)
+    routex = 'old-rag-mountain-loop-trail'
+    routey = 'mount-lafayette-and-franconia-ridge-trail-loop'
+    for key in [frozenset([routex, routey])]:
+        #routex, routey = key
+        data = model.getData(routex, routey, project=False, maps=maps)
         xvals = data.getData(routex)
         yvals = data.getData(routey)
         n = len(xvals)
         if n<10:
             continue
-        print(routex, routey, R2[key])
+        print(routex, routey, R2[key], n)
 
         xgrid = np.linspace(np.amin(xvals), np.amax(xvals), 1000)
         ygrid = maps[key](routex, routey, xgrid)
 
+        ypred = maps[key](routex, routey, xvals)
+
+        ss1 = np.sum((yvals-np.mean(yvals))**2)
+        ss2 = np.sum((yvals-ypred)**2)
+        print("Calculated R^2 = "+str(1.-ss2/ss1))
         if not percentile:
             renorm = 1./3600.
         else:
             renorm = 1.
-    
+
+        import matplotlib as mp
+        mp.rcParams['xtick.labelsize'] = 14
+        mp.rcParams['ytick.labelsize'] = 14            
         plt.figure()
         plt.scatter(xvals*renorm, yvals*renorm, color='black', marker='o')
         plt.plot(xgrid*renorm, ygrid*renorm, color='blue')
+        plt.xlabel(r'Time on Old Rag [hrs]', fontsize=18)
+        plt.ylabel(r'Time on Franconia Ridge [hrs]', fontsize=18)
+        msg = r'$R^2 = $' + str(round(R2[key], 3))
+        plt.title(msg, fontsize=18)
+        plt.tight_layout()
         plt.show()
