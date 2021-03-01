@@ -613,9 +613,10 @@ if __name__=='__main__':
     model = LinearModel(pairs)
     maps = model.lstsq_solution()
     R2 = model.computeR2(maps)
-    for key in pairs.getRoutes():
+    #for key in pairs.getRoutes():
+    for key in [frozenset(['mount-lafayette-and-franconia-ridge-trail-loop', 'old-rag-mountain-loop-trail'])]:
         routex, routey = key
-        data = model.getData(routex, routey, project=False, maps=maps)
+        data = model.getData(routex, routey, project=True, maps=maps)
         xvals = data.getData(routex)
         yvals = data.getData(routey)
         n = len(xvals)
