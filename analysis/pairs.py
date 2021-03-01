@@ -435,7 +435,7 @@ class LinearMap2D:
 
         Returns the (off-diagonal) Pearson correlation coefficient
         """
-        xdata = data.getData(self.routey)
+        xdata = data.getData(self.routex)
         ydata = data.getData(self.routey)
         return np.corrcoef(xdata, ydata)[0,1] 
     
