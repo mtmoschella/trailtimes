@@ -66,8 +66,8 @@ class Activity:
         """
 
         meta = self.getMetadata()
-        # currently, require distance to agree within 10% and totaltime>0
-        return np.absolute((self.distance-meta.distance)/meta.distance)<0.1 and self.totaltime>0.
+        # currently, require distance and elevation gain to agree within 10% and totaltime>0
+        return np.absolute((self.distance-meta.distance)/meta.distance)<0.1 and np.absolute((self.gain-meta.gain)/meta.gain)<0.1 and self.totaltime>0.
 
 class Pair:
     """
@@ -203,7 +203,7 @@ class Athlete:
     """
     def __init__(self, activities):
         """
-        activities: a list of instances of class Activity
+        activities: a list or set of instances of class Activity
         """
         # check valid args
         if len(activities)==0:
@@ -213,41 +213,83 @@ class Athlete:
             raise Exception("ERROR: all activities must belong to the same athlete")
         self.activities = set(activities)
             
-    def getRoutes(self):
+    def getRoutes(self, route=None):
         """
         Returns a set of routes the athlete has done
+
+        If route is specified, simply returns {route} or raises Error if route is unavailable.
         """
-        routes = {}
+        routes = set()
         for activity in self.activities:
             routes.add(activity.route)
-        return routes
+        if route is None:
+            return routes
+        elif route in routes:
+            return {route}
+        else:
+            raise Exception("ERROR: specified route "+str(route)+" not found")
 
     def getActivities(self, route=None):
         """
-        Returns a list of Activity objects
+        Returns a set of Activity objects.
         """
-        return self.activities
+        if route is None:
+            return self.activities.copy()
+        else:
+            output = set()
+            for a in self.activities:
+                if a.route==route:
+                    output.add(a)
+            return output
 
-    def getPairs(self, routex=None, routey=None):
+    def getAverageTime(self, route):
         """
+        Returns the athlete's average performance time on the specified route.
+        """
+        activities = self.getActivities(route)
+        if len(activities)==0:
+            raise Exception("ERROR: average is undefined")
+        times = np.zeros(len(activities))
+        for i, activity in enumerate(activities):
+            times[i] = activity.totaltime
+        return np.mean(times)
+        
+
+    def getActivityPairs(self, routex=None, routey=None):
+        """
+        routex, routey: route strings
+
         Returns a set of Pairs for the specified routes
         or return all pairs if routex==routey==None
-        """
+        """        
+        pairs = set()
 
+        # tihs loop could still be more efficient
+        # currently it double counts pairs if routex==routey==None
+        for ax in self.getActivities(routex):
+            for ay in self.getActivities(routey):
+                if ax!=ay and ax.route!=ay.route:
+                    pairs.add(ActivityPair(ax,ay))
+        return pairs
+    
+    def getAveragePairs(self, routex=None, routey=None):
+        """
+        routex, routey: route strings
+
+        Returns a set of Pair objects, a single Pair object for each specified combination {routex, routey}
+        """
         if routex is not None and routex==routey:
             raise Exception("ERROR: routex and routey cannot be the same")
-        pairs = set()
-        # this double for loop could be more efficient
-        # currently, it double counts all pairs
-        for ai in self.activities:
-            for aj in self.activities:
-                if ai!=aj and ai.route!=aj.route:
-                    matches_routex = True if routex is None else ai.route==routex or aj.route==routex
-                    matches_routey = True if routey is None else ai.route==routey or aj.route==routey
-                    if matches_routey and matches_routex:
-                        pairs.add(ActivityPair(ai,aj))
-        return pairs
 
+        output = dict()
+        for rx in self.getRoutes(routex):
+            x = self.getAverageTime(rx)
+            for ry in self.getRoutes(routey):
+                if ry!=rx:
+                    y = self.getAverageTime(ry)
+                    output[frozenset([rx, ry])] = Pair(self.athleteid, rx, ry, x, y)
+        return set(output.values())
+    
 class PairedData:
     """
     Represents a set of data points for a single paired of routes {routex, routey}
@@ -460,7 +502,7 @@ def get_athletes():
     print("Found "+str(len(athletes))+" out of "+str(len(activities))+" athletes with multiple routes.")
     return athletes
 
-def get_all_pairs():
+def get_all_pairs(avg=False):
     """
     Get all pairs in the dataset.
 
@@ -472,7 +514,10 @@ def get_all_pairs():
     # fill Pairs
     athletes = get_athletes()
     for athleteid in athletes:
-        athlete_pairs = athletes[athleteid].getPairs()
+        if avg:
+            athlete_pairs = athletes[athleteid].getAveragePairs()
+        else:
+            athlete_pairs = athletes[athleteid].getActivityPairs()
         for pair in athlete_pairs:
             pairs.add(pair)
     return pairs
@@ -480,7 +525,7 @@ def get_all_pairs():
 if __name__=='__main__':
     import matplotlib.pyplot as plt
     print("Loading Pairs...")
-    pairs = get_all_pairs()
+    pairs = get_all_pairs(avg=True)
     print("Done.")
     routes = pairs.getRoutes()
     model = LinearModel(pairs)
@@ -490,9 +535,12 @@ if __name__=='__main__':
         data = model.getData(routex, routey)
         xvals = data.getData(routex)
         yvals = data.getData(routey)
+        n = len(xvals)
+        if n<10:
+            continue
         xgrid = np.linspace(np.amin(xvals), np.amax(xvals), 1000)
         ygrid = maps[key](routex, routey, xgrid)
         plt.figure()
-        plt.scatter(xvals, yvals, color='black', marker='o')
-        plt.plot(xgrid, ygrid, color='blue')
+        plt.scatter(xvals/3600., yvals/3600., color='black', marker='o')
+        plt.plot(xgrid/3600., ygrid/3600., color='blue')
         plt.show()
