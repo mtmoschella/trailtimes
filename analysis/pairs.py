@@ -306,9 +306,9 @@ class PairedData:
         self.ydata = np.array(ydata)
 
     def getData(self, route):
-        if route==routex:
+        if route==self.routex:
             return self.xdata
-        elif route==routey:
+        elif route==self.routey:
             return self.ydata
         else:
             raise Exception("ERROR: Invalid route "+str(route))
@@ -364,9 +364,21 @@ class LinearMap2D:
 
         Returns the sum of the squares of the residuals y - f(x)
         """
-        xdata = data.getData(routex)
-        ydata = data.getData(routey)
-        return np.sum((y - f(xdata, *self.params))**2)
+        xdata = data.getData(self.routex)
+        ydata = data.getData(self.routey)
+        return np.sum((ydata - self.f(xdata, *self.params))**2)
+
+    def computeR2(self, data):
+        """
+        data: a PairedData object
+
+        Returns the R^2 coefficient
+        """
+
+        ydata = data.getData(self.routey)
+        ssres = self.compute_residual(data)
+        sstot = np.sum((ydata-np.mean(ydata))**2)
+        return 1. - ssres/sstot
     
 class LinearModel:
     """
@@ -432,11 +444,8 @@ class LinearModel:
 
 
                 ######## remove this assertion statement once I'm convinced the code is safe
-                assert set(vals.keys())==match_routes, "ERROR: There is a bug in the code"
-                #if set(vals.keys())!=match_routes:
-                #    print("ERROR:")
-                #    print("vals: "+str(vals.keys()))
-                #    print("match_routes: "+str(match_routes))
+                #assert set(vals.keys())==match_routes, "ERROR: There is a bug in the code"
+                
                 xvals.append(vals[routex])
                 yvals.append(vals[routey])
             
@@ -454,6 +463,21 @@ class LinearModel:
             data = self.getData(routex, routey, project=project, maps=maps)
             s += maps[key].compute_residual(data)
         return s
+
+    def computeR2(self, maps, project=False):
+        """
+        maps: a dict of LinearMap2D objects, indexed by frozenset([routex, routey])
+
+        Compute the R^2 values for each individual regression.
+
+        Returns a dict of floats, indexed by frozenset([routex, routey])
+        """
+        R2 = dict()
+        for key in self.pairs.getRoutes():
+            routex, routey = key
+            data = self.getData(routex, routey, project=project, maps=maps)
+            R2[key] = maps[key].computeR2(data)
+        return R2
     
     def lstsq_solution(self):
         """
@@ -467,6 +491,7 @@ class LinearModel:
             data = self.getData(routex, routey)
             maps[key] = LinearMap2D.lstsq(data)
         return maps
+
 
 def get_routes():
     return os.listdir(datadir)
@@ -537,14 +562,18 @@ if __name__=='__main__':
     routes = pairs.getRoutes()
     model = LinearModel(pairs)
     maps = model.lstsq_solution()
+    R2 = model.computeR2(maps)
     for key in pairs.getRoutes():
         routex, routey = key
-        data = model.getData(routex, routey, project=True, maps=maps)
+        data = model.getData(routex, routey, project=False, maps=maps)
         xvals = data.getData(routex)
         yvals = data.getData(routey)
         n = len(xvals)
         if n<10:
             continue
+        print(routex, routey, R2[key])
+        continue
+
         xgrid = np.linspace(np.amin(xvals), np.amax(xvals), 1000)
         ygrid = maps[key](routex, routey, xgrid)
         plt.figure()
