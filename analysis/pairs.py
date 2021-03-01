@@ -399,11 +399,11 @@ class LinearMap2D:
         y = data.ydata
         mat = np.transpose([np.ones(len(x)), x])
         p0, resid, rank, s = np.linalg.lstsq(mat, y, rcond=None) # use OLS for initial guess
-        odr_model = odr.Model(self.f)
+        odr_model = odr.Model(LinearMap2D.f)
         odr_data = odr.Data(x, y)
         odr_solver = odr.ODR(odr_data, odr_model, beta0=p0)
         odr_output = odr_solver.run()
-        return odr_output.beta
+        return LinearMap2D(data.routex, data.routey, odr_output.beta)
     
     def __call__(self, route_orig, route_dest, x_orig):
         if route_orig==self.routex and route_dest==self.routey:
@@ -629,11 +629,11 @@ if __name__=='__main__':
     model = LinearModel(pairs)
     maps = model.lstsq_solution()
     rho = model.computeRho(maps)
-    #for key in pairs.getRoutes():
-    routex = 'old-rag-mountain-loop-trail'
-    routey = 'mount-lafayette-and-franconia-ridge-trail-loop'
-    for key in [frozenset([routex, routey])]:
-        #routex, routey = key
+    for key in pairs.getRoutes():
+    #routex = 'old-rag-mountain-loop-trail'
+    #routey = 'mount-lafayette-and-franconia-ridge-trail-loop'
+    #for key in [frozenset([routex, routey])]:
+        routex, routey = key
         data = model.getData(routex, routey, project=False, maps=maps)
         xvals = data.getData(routex)
         yvals = data.getData(routey)
